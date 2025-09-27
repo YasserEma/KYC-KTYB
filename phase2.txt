@@ -1,0 +1,104 @@
+: Phase 2 - Entities List & Read Experience
+Act as a senior full-stack engineer. Your task is to build Phase 2 of the multi-tenant SaaS KYC/KYB portal, focusing on the core read-experience for tenant users. This phase builds directly upon the database schema, RLS policies, and application foundation created in Phase 1.
+
+Core Principles to Adhere To:
+
+Clean Code & Structure: Continue to follow the established standards for modular, readable, and maintainable TypeScript code. All new components should be well-organized and reusable where appropriate.
+
+Enterprise UI/UX: The user interface must be clean, professional, and intuitive. The table and drawer components are the heart of the application and must meet enterprise-grade expectations for functionality and design.
+
+
+
+Performance: Use Next.js 14 App Router features like Server Components for data fetching and streaming responses with Suspense to ensure a fast, responsive user experience, especially for loading histories in the drawer.
+
+
+Documentation Mandate (New Requirement):
+At the end of your work, you must create a DOCUMENTATION.md file in the project's root directory. This file is for project review and must contain the following sections:
+
+Phase 2 Summary: A high-level overview of the features implemented in this phase.
+
+New Components Created: A list of the key new React components (e.g., BusinessTable, EntityDetailsDrawer) and a brief description of their purpose and props.
+
+Testing Instructions: A clear, step-by-step guide on how to test the new functionality. For example: "1. Log in as the ANALYST user. 2. Navigate to the /entities page. 3. Test the search and status filter..."
+
+Key Decisions & Notes: Briefly explain any important technical decisions, such as the strategy used for URL state management or how data streaming was implemented.
+
+Phase 2 Detailed Deliverables:
+1. Tenant Authentication UI & Logic
+
+Build the tenant-branded login page at the 
+
+/login route.
+
+The page should feature fields for Email and Password, a "Sign in" button, and links for "Forgot password" (non-functional for now).
+
+The tenant's specific brand logo and colors, established in Phase 1, should be displayed on this page.
+
+Implement the login logic using the Supabase Auth client. Upon successful login, the user must be redirected to the 
+
+/entities page. Failed login attempts should be audited.
+
+2. Entities Page & Enterprise Table Component
+
+Create the main entities page at the /(app)/entities/page.tsx route.
+
+Develop a reusable, high-quality <BusinessTable> component.
+
+Table Toolbar: The toolbar must include:
+
+A text search input for Name/ID.
+
+Dropdown filters for "Status" and "Type".
+
+A "Column Visibility" dropdown to show/hide columns.
+
+A "CSV Export" button.
+
+A "Create new" button (this will navigate to the onboarding pages in a later phase).
+
+Table Body:
+
+The table must display the following columns: #, Name, Status (as a badge), Type (as a chip), Nationality, Government ID, Created At, and Created By.
+
+Implement server-side sorting for Name, Created At, Status, and Type.
+
+Implement server-side pagination with user-selectable page sizes (10, 25, 50).
+
+URL State Management: All table states (filters, sorting, search query, current page) must be reflected in the URL query parameters (e.g., /entities?page=2&sortBy=name&status=ACTIVE). This ensures the state is bookmarkable and shareable.
+
+3. Details Drawer Component
+
+When a user clicks on a table row, a right-side details drawer must slide out.
+
+The drawer's visibility should be controlled by a URL query parameter (e.g., 
+
+/entities?view=[entity_id]), allowing the drawer state to be preserved on page refresh.
+
+The drawer should be 50% of the screen width on desktop and 100% on mobile. It must be closable via an "Esc" key press or by clicking an overlay.
+
+Drawer Content (Streaming): Populate the drawer with data for the selected entity. Use RSC and Suspense to stream the history sections for better performance.
+
+A static "Profile" section with a mini-table of the entity's core details.
+
+A streamed "Screening History" list showing past screening runs.
+
+A streamed "Risk History" list showing past risk calculations.
+
+A streamed "Documents" list with tabs for "New", "About to expire", and "Expired".
+
+4. CSV Export Functionality
+
+Create a Next.js Route Handler that will manage the CSV export logic.
+
+This handler must accept the same filter and sort parameters as the main entities table.
+
+It should fetch the corresponding data from Supabase, respecting all active filters.
+
+It must generate a CSV file from the data and trigger a download in the user's browser.
+
+
+Crucially, every export action must be logged to the audit_logs table, including the metadata about the filters that were applied for the export.
+
+
+Final Goal for Phase 2:
+A user can successfully log into their tenant's branded portal, view a fully interactive and server-driven table of their entities, drill down into an entity's details via a streamed drawer, and export a filtered list of data to CSV, with the export action being securely audited.
