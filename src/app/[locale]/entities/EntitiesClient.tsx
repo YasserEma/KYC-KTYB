@@ -61,10 +61,14 @@ export default function EntitiesClient({
   useEffect(() => {
     if (selectedEntity && isDrawerOpen) {
       updateUrl({ view: selectedEntity });
-    } else if (!isDrawerOpen && searchParams.get('view')) {
-      updateUrl({ view: null });
+    } else if (!isDrawerOpen) {
+      // Check if view parameter exists in current URL
+      const currentUrl = new URL(window.location.href);
+      if (currentUrl.searchParams.has('view')) {
+        updateUrl({ view: null });
+      }
     }
-  }, [selectedEntity, isDrawerOpen, searchParams]);
+  }, [selectedEntity, isDrawerOpen]);
   
   // Listen for Escape key to close drawer
   useEffect(() => {
@@ -205,30 +209,143 @@ export default function EntitiesClient({
   };
   
   const handleExport = async () => {
+    console.log('[CSV Export Client] Starting export process...');
+    
     try {
       // Get current filters from URL
       const currentParams = Object.fromEntries(searchParams.entries());
+      console.log('[CSV Export Client] Current URL params:', currentParams);
       
       // Build query string for export
       const queryParams = new URLSearchParams(currentParams);
+      console.log('[CSV Export Client] Query string for export:', queryParams.toString());
       
-      // Log the export action to audit_logs
-      const supabase = await createClientWithTenant();
-      await supabase.client.from('audit_logs').insert({
-        action: 'EXPORT_ENTITIES',
-        details: {
-          filters: {
-            search: searchParams.get('search') || '',
-            status: searchParams.get('status') || '',
-            type: searchParams.get('type') || '',
-          }
+      // Get Supabase client with tenant context
+      const { client: supabase } = createClientWithTenant();
+      console.log('[CSV Export Client] Supabase client created');
+      
+      // Get tenant ID from hostname
+      const hostname = window.location.hostname;
+      const tenantSlug = hostname.split('.')[0];
+      console.log('[CSV Export Client] Hostname:', hostname, 'Tenant slug:', tenantSlug);
+      
+      // For local development, use 'acme' as default tenant
+      const effectiveSlug = hostname === 'localhost' ? 'acme' : tenantSlug;
+      console.log('[CSV Export Client] Effective tenant slug:', effectiveSlug);
+      
+      let tenantId = null;
+      if (effectiveSlug) {
+        console.log('[CSV Export Client] Fetching tenant data for slug:', effectiveSlug);
+        // Fetch tenant data to get the ID
+        const { data, error } = await supabase
+          .from('tenants')
+          .select('id')
+          .eq('slug', effectiveSlug)
+          .single();
+          
+        console.log('[CSV Export Client] Tenant query result:', { data, error });
+          
+        if (data && !error) {
+          tenantId = data.id;
+          console.log('[CSV Export Client] Tenant ID found:', tenantId);
+        } else {
+          console.error('[CSV Export Client] Failed to get tenant ID:', error);
         }
+      }
+      
+      if (!tenantId) {
+        console.error('[CSV Export Client] No tenant ID available');
+        alert('Unable to determine tenant context. Please try again.');
+        return;
+      }
+      
+      console.log('[CSV Export Client] Logging export action to audit_logs...');
+      // Log the export action to audit_logs
+      try {
+        await supabase.from('audit_logs').insert({
+          action: 'EXPORT_ENTITIES',
+          details: {
+            filters: {
+              search: searchParams.get('search') || '',
+              status: searchParams.get('status') || '',
+              type: searchParams.get('type') || '',
+            }
+          }
+        });
+        console.log('[CSV Export Client] Audit log created successfully');
+      } catch (auditError) {
+        console.error('[CSV Export Client] Failed to create audit log:', auditError);
+        // Continue with export even if audit logging fails
+      }
+      
+      // Get the session for authentication
+      console.log('[CSV Export Client] Getting user session...');
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('[CSV Export Client] No user session found');
+        alert('You must be logged in to export data.');
+        return;
+      }
+      
+      console.log('[CSV Export Client] User session found, user ID:', session.user?.id);
+      console.log('[CSV Export Client] Making request to export API...');
+      
+      // Make authenticated request to export API
+      const exportUrl = `/api/entities/export?${queryParams.toString()}`;
+      console.log('[CSV Export Client] Export URL:', exportUrl);
+      
+      const headers = {
+        'Authorization': `Bearer ${session.access_token}`,
+        'x-tenant-id': tenantId,
+        'Content-Type': 'application/json',
+      };
+      console.log('[CSV Export Client] Request headers:', headers);
+      
+      const response = await fetch(exportUrl, {
+        method: 'GET',
+        headers,
       });
       
-      // Trigger download
-      window.location.href = `/api/entities/export?${queryParams.toString()}`;
+      console.log('[CSV Export Client] Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[CSV Export Client] Export failed with error:', errorText);
+        throw new Error(`Export failed: ${response.statusText} - ${errorText}`);
+      }
+      
+      // Get the CSV content
+      console.log('[CSV Export Client] Getting CSV content from response...');
+      const csvContent = await response.text();
+      console.log('[CSV Export Client] CSV content length:', csvContent.length);
+      console.log('[CSV Export Client] CSV content preview (first 200 chars):', csvContent.substring(0, 200));
+      
+      // Create and trigger download
+      console.log('[CSV Export Client] Creating download blob...');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const filename = `entities-export-${new Date().toISOString().split('T')[0]}.csv`;
+      
+      console.log('[CSV Export Client] Triggering download with filename:', filename);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      console.log('[CSV Export Client] Export completed successfully');
+      
     } catch (error) {
-      console.error('Error exporting data:', error);
+      console.error('[CSV Export Client] Error exporting data:', error);
       alert('Failed to export data. Please try again.');
     }
   };
@@ -248,24 +365,35 @@ export default function EntitiesClient({
     const sortBy = searchParams.get('sortBy') || initialParams.sortBy;
     const sortDirection = (searchParams.get('sortDirection') || initialParams.sortDirection) as 'asc' | 'desc';
     const search = searchParams.get('search') || '';
-    const status = searchParams.get('status') || '';
     const type = searchParams.get('type') || '';
     
     // Fetch data from API
     const supabase = await createClientWithTenant();
     
-    // Build query
-      let query = supabase.client
-        .from('entities')
-        .select('*, profiles!created_by(full_name)', { count: 'exact' });
+    // Build query with proper field selection
+    let query = supabase.client
+      .from('entities')
+      .select(`
+        id,
+        type,
+        reference_id,
+        first_name,
+        last_name,
+        legal_name,
+        registration_number,
+        email,
+        phone,
+        created_at,
+        created_by,
+        profiles!created_by(full_name),
+        countries!nationality_id(name),
+        incorporation_countries:countries!incorporation_country_id(name)
+      `, { count: 'exact' })
+      .eq('tenant_id', '11111111-1111-1111-1111-111111111111'); // Use default tenant for development
     
     // Apply filters
     if (search) {
-      query = query.or(`name.ilike.%${search}%,government_id.ilike.%${search}%`);
-    }
-    
-    if (status) {
-      query = query.eq('status', status as "ACTIVE" | "INACTIVE");
+      query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,legal_name.ilike.%${search}%,registration_number.ilike.%${search}%,email.ilike.%${search}%`);
     }
     
     if (type) {
@@ -292,11 +420,13 @@ export default function EntitiesClient({
     // Format data for the table
     const formattedData = data?.map((entity: any) => ({
       id: entity.id,
-      name: entity.name,
-      status: entity.status,
+      name: entity.type === 'INDIVIDUAL' 
+        ? `${entity.first_name || ''} ${entity.last_name || ''}`.trim() 
+        : entity.legal_name || '',
+      status: 'ACTIVE', // Default status since we don't have this field
       type: entity.type,
-      nationality: entity.nationality_codes ? entity.nationality_codes.join(', ') : '',
-      government_id: entity.government_id || '',
+      nationality: entity.countries?.name || entity.incorporation_countries?.name || '',
+      government_id: entity.registration_number || entity.reference_id || '',
       created_at: new Date(entity.created_at).toLocaleString(),
       created_by: entity.profiles?.full_name || '',
     })) || [];

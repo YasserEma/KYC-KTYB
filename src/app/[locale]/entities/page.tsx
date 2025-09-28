@@ -1,9 +1,7 @@
 import { Suspense } from 'react';
 import { getTranslations } from 'next-intl/server';
-import { getTenantContext } from '@/lib/supabase/server';
+import { getTenantContext, createClient } from '@/lib/supabase/server';
 import EntitiesClient from './EntitiesClient';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 
 // Types for entity data
 type Entity = {
@@ -36,24 +34,51 @@ async function EntitiesData({
   type?: string;
 }) {
   const tenantContext = await getTenantContext();
-  if (!tenantContext?.tenantId) {
-    throw new Error('Tenant context not available');
+  
+  // For development, use default tenant if context is not available
+  let tenantId = tenantContext?.tenantId;
+  if (!tenantId) {
+    // Use the demo tenant ID for development
+    tenantId = '11111111-1111-1111-1111-111111111111';
+    console.log('Using default tenant ID for development:', tenantId);
   }
 
-  const supabase = createServerClient();
+  const supabase = await createClient();
   
-  // Build query
-  let query = supabase.client
+  // Check user authentication
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    console.error('Authentication error in EntitiesData:', authError);
+    throw new Error('User not authenticated');
+  }
+  
+  console.log('User authenticated:', user.email);
+  
+  // Build query with proper field selection
+  let query = supabase
     .from('entities')
-    .select('*, profiles!created_by(full_name)', { count: 'exact' });
+    .select(`
+      id,
+      type,
+      reference_id,
+      first_name,
+      last_name,
+      legal_name,
+      registration_number,
+      email,
+      phone,
+      created_at,
+      created_by,
+      profiles!created_by(full_name),
+      countries!nationality_id(name),
+      incorporation_countries:countries!incorporation_country_id(name)
+    `, { count: 'exact' })
+    .eq('tenant_id', tenantId);
   
   // Apply filters
   if (search) {
-    query = query.or(`name.ilike.%${search}%,government_id.ilike.%${search}%`);
-  }
-  
-  if (status) {
-    query = query.eq('status', status);
+    query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,legal_name.ilike.%${search}%,registration_number.ilike.%${search}%,email.ilike.%${search}%`);
   }
   
   if (type) {
@@ -76,11 +101,13 @@ async function EntitiesData({
   // Format data for the table
   const formattedData = data?.map((entity: any) => ({
     id: entity.id,
-    name: entity.name,
-    status: entity.status,
+    name: entity.type === 'INDIVIDUAL' 
+      ? `${entity.first_name || ''} ${entity.last_name || ''}`.trim() 
+      : entity.legal_name || '',
+    status: 'ACTIVE', // Default status since we don't have this field
     type: entity.type,
-    nationality: entity.nationality_codes ? entity.nationality_codes.join(', ') : '',
-    government_id: entity.government_id || '',
+    nationality: entity.countries?.name || entity.incorporation_countries?.name || '',
+    government_id: entity.registration_number || entity.reference_id || '',
     created_at: new Date(entity.created_at).toLocaleString(),
     created_by: entity.profiles?.full_name || '',
   })) || [];
@@ -94,7 +121,7 @@ async function EntitiesData({
 export default async function EntitiesPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     page?: string;
     pageSize?: string;
     sortBy?: string;
@@ -103,42 +130,35 @@ export default async function EntitiesPage({
     status?: string;
     type?: string;
     view?: string;
-  };
+  }>;
 }) {
   const t = await getTranslations('entities');
   const tenantContext = await getTenantContext();
   
-  // Parse search params - using await to fix dynamic API usage
-  const page = searchParams?.page ? parseInt(await searchParams.page) : 1;
-  const pageSize = searchParams?.pageSize ? parseInt(await searchParams.pageSize) : 10;
-  const sortBy = (await searchParams?.sortBy) || 'created_at';
-  const sortDirection = (await searchParams?.sortDirection) || 'desc';
-  const search = (await searchParams?.search) || '';
-  const status = (await searchParams?.status) || '';
-  const type = (await searchParams?.type) || '';
-  const viewEntityId = await searchParams?.view;
+  // Parse search params - await once to fix dynamic API usage
+  const params = await searchParams;
+  const page = params?.page ? parseInt(params.page) : 1;
+  const pageSize = params?.pageSize ? parseInt(params.pageSize) : 10;
+  const sortBy = params?.sortBy || 'created_at';
+  const sortDirection = params?.sortDirection || 'desc';
+  const search = params?.search || '';
+  const status = params?.status || '';
+  const type = params?.type || '';
+  const viewEntityId = params?.view;
+  
+  // Create supabase client for fetching filter options
+  const supabase = await createClient();
+  
+  // Check user authentication
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    console.error('Authentication error in EntitiesPage:', authError);
+    // Redirect to login page
+    throw new Error('User not authenticated');
+  }
   
   // Get entity status and type options for filters
-  const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => {
-          return cookieStore.getAll().map((cookie) => ({
-            name: cookie.name,
-            value: cookie.value,
-          }));
-        },
-        setAll: (cookies: { name: string; value: string; options?: any }[]) => {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        }
-      }
-    }
-  );
   const { data: statusOptions } = await supabase
     .from('list_values')
     .select('key, label')

@@ -85,6 +85,7 @@
   },
   "entities": {
     "title": "Entities",
+    "description": "Manage and monitor all entities in your KYC platform",
     "individual": "Individual",
     "organization": "Organization",
     "addNew": "Add New Entity",
