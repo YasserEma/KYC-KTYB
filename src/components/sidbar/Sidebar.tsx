@@ -5,6 +5,8 @@ import { JSX, ReactNode, useState } from "react";
 import { SidebarItem } from "./sidebarItem";
 import { Users2, UserPlus, Building2, ShieldCheck, Settings, BarChart3, ListChecks, MoreVertical, Shield, UserCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { useDisplayEmail, useDisplayName } from "../userDisplayName";
+import SignInButton from "../login";
 
 
 type SidebarItemData = {
@@ -53,6 +55,9 @@ export function Sidebar(): JSX.Element {
     const router = useRouter()
     const pathname = usePathname();
     const lastSegment = pathname.split("/").filter(Boolean).pop() || "";
+    const name = useDisplayName();
+    const email = useDisplayEmail();
+
     return (
         <aside
             className={`h-screen sticky top-0 ${expanded ? 'w-60' : 'w-16'}`}
@@ -96,8 +101,8 @@ export function Sidebar(): JSX.Element {
             `}
                     >
                         {expanded && <div className="leading-4">
-                            <h4 className="font-semibold">John Doe</h4>
-                            <span className="text-xs text-gray-600">johndoe@gmail.com</span>
+                            {name ? <>  <h4 className="font-semibold">{name}</h4>
+                                <span className="text-xs text-gray-600">{email}</span></> : <SignInButton />}
                         </div>}
 
                     </div>

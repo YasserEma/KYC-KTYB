@@ -1,7 +1,15 @@
+"use client";
 import { Search, UserCircle } from "lucide-react";
 import { JSX } from "react";
+import LogoutButton from "./logoutButton";
+import { createClient } from "@/lib/supabase/server";
+import { useDisplayName } from "./userDisplayName";
+import SignInButton from "./login";
 
-export function Header({ title }: { title: string }): JSX.Element {
+export function Header({ title }: { title: string }): Promise<JSX.Element> {
+
+    const name = useDisplayName();
+
     return (
         <header className="bg-white p-4 border-b">
             <div className="flex justify-between items-center">
@@ -15,13 +23,14 @@ export function Header({ title }: { title: string }): JSX.Element {
                             className="pl-10 pr-4 py-2 w-64 border rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-300"
                         />
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center gap-2">
                         <UserCircle size={32} className="text-gray-600" />
                         <div>
-                            <span className="font-semibold text-gray-700">Sarah Wilson</span>
+                            <span className="font-semibold text-gray-700">{name}</span>
                         </div>
 
                     </div>
+                    {name ? <LogoutButton /> : <SignInButton />}
                 </div>
             </div>
         </header>

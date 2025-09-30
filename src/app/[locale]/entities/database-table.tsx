@@ -193,13 +193,7 @@ export const EntitiesTable: React.FC<Props> = ({ data }) => {
                 </table>
             </div>
             <p className="text-sm text-gray-500 mt-2">
-                <button
-                    onClick={() => exportToCSV([selectedRow])}
-                    className="px-3 py-2 border rounded-lg flex items-center gap-2"
-                >
-                    <Download size={16} /> Export
-                    CSV
-                </button>
+
                 Showing {filteredData.length} of {data.length} results
             </p>
 

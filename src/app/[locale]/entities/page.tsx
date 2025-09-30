@@ -1,65 +1,56 @@
-import { Suspense } from 'react';
-import { getTranslations } from 'next-intl/server';
-import { getTenantContext, createClient } from '@/lib/supabase/server';
-import EntitiesClient from './EntitiesClient';
-import EntitiesHeader from './EntitiesHeader';
+import { createClient } from '@/lib/supabase/server';
+import { PostgrestError } from '@supabase/supabase-js';
+import { EntitiesTable } from './database-table';
 
-// Types for entity data
-type Entity = {
-  id: string;
-  name: string;
-  status: string;
-  type: string;
-  nationality_codes: string[] | null;
-  government_id: string | null;
-  created_at: string;
-  created_by: string;
+
+export interface Entity {
+  id: string;                // UUID (string)
+  reference_id: string;      // e.g. "IND-001"
+  type: string;              // "INDIVIDUAL" | "ORGANIZATION" | other strings
+  first_name: string | null;
+  last_name: string | null;
+  legal_name: string | null; // for companies, might be null for individuals
+  registration_number: string | null; // for ORGs, may be null
+  email: string | null;
+  phone: string | null;
+  created_at: string;        // ISO 8601 datetime string
+  created_by: string | null; // user id that created the record
+
+  // relations
+  profiles?: {
+    full_name: string | null;
+  } | null;
+
+  countries?: {
+    name: string | null;
+  } | null;
+
+  incorporation_countries?: {
+    name: string | null;
+  } | null;
+}
+// ====================================================================
+// 1. YOUR DATA FETCHING FUNCTION (No changes needed here)
+// ====================================================================
+type GetEntitiesResult = {
+  data: Entity[] | null;
+  error: PostgrestError | null;
 };
 
-// Server component to fetch entities data
-async function EntitiesData({
-  page = 1,
-  pageSize = 10,
-  sortBy = 'created_at',
-  sortDirection = 'desc',
-  search = '',
-  status = '',
-  type = '',
-}: {
-  page?: number;
-  pageSize?: number;
-  sortBy?: string;
-  sortDirection?: 'asc' | 'desc';
-  search?: string;
-  status?: string;
-  type?: string;
-}) {
-  const tenantContext = await getTenantContext();
-  
-  // For development, use default tenant if context is not available
-  let tenantId = tenantContext?.tenantId;
-  if (!tenantId) {
-    // Use the demo tenant ID for development
-    tenantId = '11111111-1111-1111-1111-111111111111';
-    console.log('Using default tenant ID for development:', tenantId);
-  }
-
-  const supabase = await createClient();
-  
-  // Check user authentication
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  
-  if (authError || !user) {
-    console.error('Authentication error in EntitiesData:', authError);
-    throw new Error('User not authenticated');
-  }
-  
-  console.log('User authenticated:', user.email);
-  
-  // Build query with proper field selection
-  let query = supabase
-    .from('entities')
-    .select(`
+export async function getEntities(): Promise<GetEntitiesResult> {
+  try {
+    const supabase = await createClient();
+    const tenantId = '11111111-1111-1111-1111-111111111111'; // Using a fixed tenant ID
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log(user?.user_metadata?.display_name)
+    if (authError || !user) {
+      console.error('Authentication error in EntitiesPage:', authError);
+      // Redirect to login page
+      throw new Error('User not authenticated');
+    }
+    const { data, error } = await supabase
+      .from('entities')
+      .select(`
       id,
       type,
       reference_id,
@@ -75,137 +66,63 @@ async function EntitiesData({
       countries!nationality_id(name),
       incorporation_countries:countries!incorporation_country_id(name)
     `, { count: 'exact' })
-    .eq('tenant_id', tenantId);
-  
-  // Apply filters
-  if (search) {
-    query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,legal_name.ilike.%${search}%,registration_number.ilike.%${search}%,email.ilike.%${search}%`);
+      .eq('tenant_id', tenantId);
+
+
+    if (error) {
+      console.error('Supabase Query Error:', error.message);
+    }
+    return { data, error };
+  } catch (e) {
+    console.error('An unexpected error occurred while fetching entities:', e);
+    return { data: null, error: e as PostgrestError };
   }
-  
-  if (type) {
-    query = query.eq('type', type);
-  }
-  
-  // Apply pagination and sorting
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  
-  const { data, count, error } = await query
-    .order(sortBy, { ascending: sortDirection === 'asc' })
-    .range(from, to);
-  
-  if (error) {
-    console.error('Error fetching entities:', error);
-    throw new Error('Failed to fetch entities');
-  }
-  
-  // Format data for the table
-  const formattedData = data?.map((entity: any) => ({
-    id: entity.id,
-    name: entity.type === 'INDIVIDUAL' 
-      ? `${entity.first_name || ''} ${entity.last_name || ''}`.trim() 
-      : entity.legal_name || '',
-    status: 'ACTIVE', // Default status since we don't have this field
-    type: entity.type,
-    nationality: entity.countries?.name || entity.incorporation_countries?.name || '',
-    government_id: entity.registration_number || entity.reference_id || '',
-    created_at: new Date(entity.created_at).toLocaleString(),
-    created_by: entity.profiles?.full_name || '',
-  })) || [];
-  
-  return {
-    data: formattedData,
-    totalCount: count || 0,
-  };
 }
 
-export default async function EntitiesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    page?: string;
-    pageSize?: string;
-    sortBy?: string;
-    sortDirection?: 'asc' | 'desc';
-    search?: string;
-    status?: string;
-    type?: string;
-    view?: string;
-  }>;
-}) {
-  const t = await getTranslations('entities');
-  const tenantContext = await getTenantContext();
-  
-  // Parse search params - await once to fix dynamic API usage
-  const params = await searchParams;
-  const page = params?.page ? parseInt(params.page) : 1;
-  const pageSize = params?.pageSize ? parseInt(params.pageSize) : 10;
-  const sortBy = params?.sortBy || 'created_at';
-  const sortDirection = params?.sortDirection || 'desc';
-  const search = params?.search || '';
-  const status = params?.status || '';
-  const type = params?.type || '';
-  const viewEntityId = params?.view;
-  
-  // Create supabase client for fetching filter options
-  const supabase = await createClient();
-  
-  // Check user authentication
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  
-  if (authError || !user) {
-    console.error('Authentication error in EntitiesPage:', authError);
-    // Redirect to login page
-    throw new Error('User not authenticated');
+
+// ====================================================================
+// 2. YOUR HOME COMPONENT (Updated to fetch and display data)
+//    This is a Server Component, so we can make it async.
+// ====================================================================
+const Home = async () => {
+  // Fetch data directly on the server when the page loads
+  const { data: entities, error } = await getEntities();
+  console.log(entities)
+  // Handle the error state
+  if (error) {
+    return (
+      <main className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600">Failed to Load Entities</h1>
+          <p className="text-gray-500 mt-2">{error.message}</p>
+        </div>
+      </main>
+    );
   }
-  
-  // Get entity status and type options for filters
-  const { data: statusOptions } = await supabase
-    .from('list_values')
-    .select('key, label')
-    .eq('list_id', 'entity_status_list')
-    .eq('status', 'ACTIVE')
-    .order('order');
-  
-  const { data: typeOptions } = await supabase
-    .from('list_values')
-    .select('key, label')
-    .eq('list_id', 'entity_type_list')
-    .eq('status', 'ACTIVE')
-    .order('order');
-  
-  // Fetch entities data
-  const entitiesPromise = EntitiesData({
-    page,
-    pageSize,
-    sortBy,
-    sortDirection: sortDirection as 'asc' | 'desc',
-    search,
-    status,
-    type,
-  });
-  
+
+  // Handle the case where no data is found
+  if (!entities || entities.length === 0) {
+    return (
+      <main className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800">No Entities Found</h1>
+          <p className="text-gray-500 mt-2">There is no data to display at the moment.</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Render the list of entities if data exists
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8">
-      <EntitiesHeader />
-      
-      <Suspense fallback={<div className="text-center py-10">Loading entities...</div>}>
-        <EntitiesClient
-          entitiesPromise={entitiesPromise}
-          statusOptions={statusOptions || []}
-          typeOptions={typeOptions || []}
-          initialParams={{
-            page,
-            pageSize,
-            sortBy,
-            sortDirection: sortDirection as 'asc' | 'desc',
-            search,
-            status,
-            type,
-          }}
-          viewEntityId={viewEntityId}
-        />
-      </Suspense>
-    </div>
+    <main className="w-full ">
+      <h1 className="text-3xl font-bold text-gray-900 mb-6">Entities List</h1>
+      <div className="w-full">
+        <EntitiesTable data={entities} />
+
+
+      </div>
+    </main>
   );
-}
+};
+
+export default Home;
