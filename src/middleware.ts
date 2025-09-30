@@ -150,14 +150,15 @@ export async function middleware(request: NextRequest) {
     (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
   );
 
-  // Only redirect to add locale if path doesn't have locale and it's not a static/API path
-  // Also check if it's not already a public path to avoid redirect loops
+  // Redirect to add locale if path doesn't have locale and it's not a static/API path
+  // Include public paths like auth routes that need locale prefixes
   if (!pathnameHasLocale && 
       !pathname.startsWith('/_next') && 
       !pathname.startsWith('/api') && 
-      !pathname.includes('.') &&
-      !isPublicPath(pathname)) {
+      !pathname.includes('.')) {
     const newUrl = new URL(`/${locale}${pathname}`, request.url);
+    // Preserve query parameters (important for reset password tokens)
+    newUrl.search = request.nextUrl.search;
     return NextResponse.redirect(newUrl);
   }
 

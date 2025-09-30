@@ -251,6 +251,7 @@
     "email": "Email Address",
     "password": "Password",
     "confirmPassword": "Confirm Password",
+    "newPassword": "New Password",
     "rememberMe": "Remember Me",
     "signIn": "Sign In",
     "signUp": "Sign Up",
@@ -260,7 +261,19 @@
     "invalidCredentials": "Invalid email or password",
     "accountCreated": "Account created successfully",
     "passwordReset": "Password reset email sent",
-    "sessionExpired": "Your session has expired"
+    "sessionExpired": "Your session has expired",
+    "resetLinkSent": "Reset link sent to your email",
+    "enterNewPassword": "Enter your new password",
+    "passwordUpdated": "Password updated successfully",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "passwordMinLength": "Password must be at least 8 characters",
+    "sendResetLink": "Send Reset Link",
+    "updatePassword": "Update Password",
+    "backToLogin": "Back to Login",
+    "passwordResetSuccess": "Password updated successfully. Please login with your new credentials.",
+    "emailNotRegistered": "This email is not registered.",
+    "resetLinkSentSuccess": "Reset link sent to your email.",
+  "passwordUpdatedSuccessfully": "Password updated successfully. Please login with your new credentials."
   },
   "errors": {
     "general": "An error occurred. Please try again.",

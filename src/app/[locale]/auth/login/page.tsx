@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname, useParams } from 'next/navigation';
 import { createClientWithTenant } from '@/lib/supabase/client';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
@@ -23,6 +23,8 @@ export default function LoginPage() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
+  const params = useParams();
+  const locale = params.locale as string;
   const redirectTo = searchParams.get('redirectTo') || '/entities';
   const t = useTranslations('auth');
 
@@ -195,14 +197,14 @@ export default function LoginPage() {
 
           <div className="flex items-center justify-between">
             <div className="text-sm">
-              <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Forgot your password?
-              </a>
+              <Link href={`/${locale}/auth/forgot-password`} className="font-medium text-indigo-600 hover:text-indigo-500">
+                {t('forgotPassword')}?
+              </Link>
             </div>
             <div className="text-sm">
-              <a href="/en/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
+              <Link href={`/${locale}/auth/signup`} className="font-medium text-indigo-600 hover:text-indigo-500">
                 Create an account
-              </a>
+              </Link>
             </div>
           </div>
 
