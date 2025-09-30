@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { getTranslations } from 'next-intl/server';
 import { getTenantContext, createClient } from '@/lib/supabase/server';
 import EntitiesClient from './EntitiesClient';
+import EntitiesHeader from './EntitiesHeader';
 
 // Types for entity data
 type Entity = {
@@ -186,10 +187,7 @@ export default async function EntitiesPage({
   
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">{t('title')}</h1>
-        <p className="mt-1 text-sm text-gray-500">{t('description')}</p>
-      </div>
+      <EntitiesHeader />
       
       <Suspense fallback={<div className="text-center py-10">Loading entities...</div>}>
         <EntitiesClient
