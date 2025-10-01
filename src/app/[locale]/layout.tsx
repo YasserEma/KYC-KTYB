@@ -1,3 +1,6 @@
+import { Header } from '@/components/Header';
+import { Sidebar } from '@/components/sidbar/Sidebar';
+
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 
@@ -13,28 +16,19 @@ export default async function TenantLayout({
 
   return (
     <NextIntlClientProvider messages={messages}>
-      <div className="min-h-screen bg-gray-50">
-        {/* Tenant Header */}
-        <header className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <div className="flex items-center">
-                <h1 className="text-xl font-semibold text-gray-900">
-                  KYC Platform
-                </h1>
-              </div>
-              <div className="flex items-center space-x-4">
-                {/* User menu will go here */}
-              </div>
-            </div>
-          </div>
-        </header>
+      <div className="min-h-screen bg-gray-50 flex">
+        <Sidebar />
+        <div className='w-full'>
+          <Header title='ComplianceHub
+' />
 
-        {/* Main Content */}
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          {children}
-        </main>
+          <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {children}
+          </main>
+        </div>
+
       </div>
+
     </NextIntlClientProvider>
   );
 }
